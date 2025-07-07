@@ -30,7 +30,9 @@ func Lint(t *testing.T, version string) {
 		bin = lintBin(t, version)
 		return nil
 	})
-	out, err := exec.Command(bin, "run").CombinedOutput()
+	out, err := exec.Command(
+		bin, "run", "--allow-parallel-runners",
+	).CombinedOutput()
 	if ee := new(exec.ExitError); err != nil && errors.As(err, &ee) {
 		t.Errorf("[lesiw.io/checker] golangci-lint failed\n%s", string(out))
 	} else if err != nil {
