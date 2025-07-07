@@ -17,13 +17,19 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/danjacques/gofslock/fslock"
 )
 
 // Lint runs golangci-lint on the current package.
 //
 // Version should be, e.g. "1.2.3" and not contain a "v".
 func Lint(t *testing.T, version string) {
-	bin := lintBin(t, version)
+	var bin string
+	_ = fslock.With(filepath.Join(cacheDir(t), "lint.lock"), func() error {
+		bin = lintBin(t, version)
+		return nil
+	})
 	out, err := exec.Command(bin, "run").CombinedOutput()
 	if ee := new(exec.ExitError); err != nil && errors.As(err, &ee) {
 		t.Errorf("[lesiw.io/checker] golangci-lint failed\n%s", string(out))
@@ -32,23 +38,18 @@ func Lint(t *testing.T, version string) {
 	}
 }
 
-func lintBin(t *testing.T, version string) string {
-	cache, err := os.UserCacheDir()
-	if err != nil {
-		fatal(t, "failed to get user cache directory: %v", err)
-	}
-	dir := filepath.Join(cache, "gochecker")
-	if err = os.MkdirAll(dir, 0755); err != nil {
-		fatal(t, "failed to create cache directory: %v", err)
-	}
-	bin := fmt.Sprintf("golangci-lint-%s-%s-%s",
-		version, runtime.GOOS, runtime.GOARCH)
-	if _, err = os.Stat(filepath.Join(dir, bin)); os.IsNotExist(err) {
-		lintFetch(t, filepath.Join(dir, bin), version)
+func lintBin(t *testing.T, version string) (path string) {
+	path = filepath.Join(
+		cacheDir(t),
+		fmt.Sprintf("golangci-lint-%s-%s-%s",
+			version, runtime.GOOS, runtime.GOARCH),
+	)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		lintFetch(t, path, version)
 	} else if err != nil {
-		fatal(t, "failed to stat %v: %v", filepath.Join(dir, bin), err)
+		fatal(t, "failed to stat %v: %v", path, err)
 	}
-	return filepath.Join(dir, bin)
+	return
 }
 
 const lintReleaseURL = "https://github.com/golangci/golangci-lint/releases" +
