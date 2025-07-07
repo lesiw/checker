@@ -27,8 +27,12 @@ func (o Ops) Doc() error {
 	if err != nil {
 		return fmt.Errorf("goreadme failed: %w", err)
 	}
+	content := "# lesiw.io/checker " +
+		"[![Go Reference](https://pkg.go.dev/badge/lesiw.io/checker.svg)]" +
+		"(https://pkg.go.dev/lesiw.io/checker)\n" +
+		r.Out[strings.Index(r.Out, "\n")+1:] + "\n"
 	_, err = cmdio.GetPipe(
-		strings.NewReader(r.Out+"\n"),
+		strings.NewReader(content),
 		rnr.Command("tee", "docs/README.md"),
 	)
 	if err != nil {

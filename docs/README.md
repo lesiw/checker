@@ -1,4 +1,4 @@
-# checker
+# lesiw.io/checker [![Go Reference](https://pkg.go.dev/badge/lesiw.io/checker.svg)](https://pkg.go.dev/lesiw.io/checker)
 
 Package checker provides functions to run analyzers and linters as Go tests.
 
@@ -13,7 +13,8 @@ import (
 )
 
 func TestCheck(t *testing.T) {
-    checker.Run(t, errcheck.Analyzer)
+    checker.Run(t, errcheck.Analyzer) // Run errcheck by itself.
+    checker.Lint(t, "2.2.1")          // Run golangci-lint v2.2.1.
 }
 ```
 
