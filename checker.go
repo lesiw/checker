@@ -18,21 +18,16 @@ package checker
 import (
 	"os"
 	"path/filepath"
-	"testing"
 )
 
-func cacheDir(t *testing.T) string {
+func cacheDir(t T) string {
 	cache, err := os.UserCacheDir()
 	if err != nil {
-		fatal(t, "failed to get user cache directory: %v", err)
+		t.Fatalf("failed to get user cache directory: %v", err)
 	}
 	dir := filepath.Join(cache, "gochecker")
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		fatal(t, "failed to create cache directory: %v", err)
+		t.Fatalf("failed to create cache directory: %v", err)
 	}
 	return dir
-}
-
-func fatal(t *testing.T, format string, a ...any) {
-	t.Fatalf("[lesiw.io/checker] "+format, a...)
 }
