@@ -69,6 +69,7 @@ func lintSum(t T, version string) []byte {
 		t.Fatalf("failed to fetch %v: %v", url, err)
 	}
 	defer resp.Body.Close()
+
 	hashtext := lintHash(t, resp.Body, version)
 	hash, err := hex.DecodeString(hashtext)
 	if err != nil {
@@ -82,12 +83,12 @@ func lintHash(t T, r io.Reader, version string) string {
 		version, runtime.GOOS, runtime.GOARCH)
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		line := scanner.Text()
-		hash, file, ok := strings.Cut(line, "  ")
+		hash, file, ok := strings.Cut(scanner.Text(), "  ")
 		if !ok {
 			t.Fatalf("failed to parse golangci-lint checksum file: "+
-				"failed to parse line: %v", line)
-		} else if file == wantfile {
+				"failed to parse line: %v", scanner.Text())
+		}
+		if file == wantfile {
 			return hash
 		}
 	}
@@ -105,20 +106,24 @@ func lintFetch(t T, path, version string) {
 
 	sum := sha256.New()
 	var buf bytes.Buffer
-	r := io.TeeReader(resp.Body, &buf)
-	if _, err = io.Copy(sum, r); err != nil {
+	if _, err = io.Copy(io.MultiWriter(sum, &buf), resp.Body); err != nil {
 		t.Fatalf("failed to read body from %v: %v", url, err)
 	}
+
 	gr, err := gzip.NewReader(&buf)
 	if err != nil {
 		t.Fatalf("failed to create gzip reader for %v: %v", url, err)
 	}
-	tr := tar.NewReader(gr)
+	defer gr.Close()
 
+	tr := tar.NewReader(gr)
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
 			t.Fatalf("failed to find 'golangci-lint' binary in %v", url)
+		}
+		if err != nil {
+			t.Fatalf("failed to read tar entry: %v", err)
 		}
 		if strings.HasSuffix(hdr.Name, "golangci-lint") {
 			dir := filepath.Dir(path)
