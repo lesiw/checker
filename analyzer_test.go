@@ -40,21 +40,13 @@ func checkFuncDecl(
 }
 
 func checkGenDecl(node *ast.GenDecl, pass *analysis.Pass, checker identCheck) {
-	switch node.Tok {
-	case token.TYPE:
-		for _, spec := range node.Specs {
-			if tspec, ok := spec.(*ast.TypeSpec); ok &&
-				tspec.Name.Name != "_" {
-				checker(pass, tspec.Name)
-			}
-		}
-	case token.VAR:
-		for _, spec := range node.Specs {
-			if vspec, ok := spec.(*ast.ValueSpec); ok {
-				for _, name := range vspec.Names {
-					if name.Name != "_" {
-						checker(pass, name)
-					}
+	for _, spec := range node.Specs {
+		if tspec, ok := spec.(*ast.TypeSpec); ok && tspec.Name.Name != "_" {
+			checker(pass, tspec.Name)
+		} else if vspec, ok := spec.(*ast.ValueSpec); ok {
+			for _, name := range vspec.Names {
+				if name.Name != "_" {
+					checker(pass, name)
 				}
 			}
 		}
@@ -78,7 +70,7 @@ var publicNames = &analysis.Analyzer{
 	Doc:  "reports on public names",
 	Run: identAnalyze(func(pass *analysis.Pass, ident *ast.Ident) {
 		if ident.IsExported() {
-			pass.Reportf(ident.Pos(), "publicnames: %s is public", ident.Name)
+			pass.Reportf(ident.Pos(), "%s is public", ident.Name)
 		}
 	}),
 }
@@ -89,8 +81,7 @@ var numberedNames = &analysis.Analyzer{
 	Run: identAnalyze(func(pass *analysis.Pass, ident *ast.Ident) {
 		for _, r := range ident.Name {
 			if r >= '0' && r <= '9' {
-				pass.Reportf(ident.Pos(),
-					"numberednames: %s has numbers", ident.Name)
+				pass.Reportf(ident.Pos(), "%s has numbers", ident.Name)
 				break
 			}
 		}
@@ -102,8 +93,7 @@ var shortNames = &analysis.Analyzer{
 	Doc:  "reports on single-letter names",
 	Run: identAnalyze(func(pass *analysis.Pass, ident *ast.Ident) {
 		if len(ident.Name) == 1 {
-			pass.Reportf(ident.Pos(),
-				"shortnames: %s is single letter", ident.Name)
+			pass.Reportf(ident.Pos(), "%s is single letter", ident.Name)
 		}
 	}),
 }
@@ -113,8 +103,7 @@ var underscoreNames = &analysis.Analyzer{
 	Doc:  "reports on names containing underscores",
 	Run: identAnalyze(func(pass *analysis.Pass, ident *ast.Ident) {
 		if strings.Contains(ident.Name, "_") {
-			pass.Reportf(ident.Pos(),
-				"underscorenames: %s has underscore", ident.Name)
+			pass.Reportf(ident.Pos(), "%s has underscore", ident.Name)
 		}
 	}),
 }
@@ -127,8 +116,7 @@ var todoAnalyzer = &analysis.Analyzer{
 			for _, cg := range file.Comments {
 				for _, c := range cg.List {
 					if strings.Contains(c.Text, "TODO") {
-						pass.Reportf(c.Pos(),
-							"todocomments: comment contains TODO")
+						pass.Reportf(c.Pos(), "comment contains TODO")
 					}
 				}
 			}
@@ -202,7 +190,7 @@ func TestParseNolint(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := ignore(tt.input)
+		got := parseIgnore(tt.input)
 		if tt.want == nil {
 			if got != nil {
 				t.Errorf("parseNolint(%q) = %v, want nil", tt.input, got)

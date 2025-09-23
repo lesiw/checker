@@ -1,6 +1,6 @@
 package commentignore
 
-// TODO: This should be reported // want "todocomments: comment contains TODO"
+// TODO: This should be reported // want "comment contains TODO"
 func goodFunc() {}
 
 // TODO: This should be suppressed //ignore:todocomments
@@ -16,7 +16,7 @@ func blockSuppressedFunc() {}
 //ignore:all
 func allSuppressedFunc() {}
 
-// TODO: This should be reported // want "todocomments: comment contains TODO"
+// TODO: This should be reported // want "comment contains TODO"
 func normalFunc() {}
 
 // TODO: This should be suppressed
@@ -25,9 +25,9 @@ func normalFunc() {}
 //ignore:todocomments
 func multiLineSuppressedFunc() {}
 
-// TODO: Multiple comments should be reported // want "todocomments: comment contains TODO"
-// TODO: This should be reported // want "todocomments: comment contains TODO"
-// TODO: This should also be reported // want "todocomments: comment contains TODO"
+// TODO: Multiple comments should be reported // want "comment contains TODO"
+// TODO: This should be reported // want "comment contains TODO"
+// TODO: This should also be reported // want "comment contains TODO"
 func multiLineNormalFunc() {}
 
 // TODO: This is a standalone comment block with no associated code
@@ -37,7 +37,7 @@ func multiLineNormalFunc() {}
 
 func separatorFunc() {}
 
-// TODO: This is another standalone comment that should be reported // want "todocomments: comment contains TODO"
+// TODO: This is another standalone comment that should be reported // want "comment contains TODO"
 
 //ignore:todocomments
 func inheritanceTestFunc() {

@@ -12,7 +12,7 @@ func suppressedFunc() {
 }
 
 func unsuppressedFunc() {
-	var y int // want "shortnames: y is single letter"
+	var y int // want "y is single letter"
 	_ = y
 }
 
@@ -26,8 +26,8 @@ func nestedSuppressedFunc() {
 }
 
 func nestedUnsuppressedFunc() {
-	func_with_underscores := func() { // want "underscorenames: func_with_underscores has underscore"
-		var snake_case int // want "underscorenames: snake_case has underscore"
+	func_with_underscores := func() { // want "func_with_underscores has underscore"
+		var snake_case int // want "snake_case has underscore"
 		_ = snake_case
 	}
 	func_with_underscores()

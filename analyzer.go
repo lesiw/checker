@@ -18,51 +18,47 @@ func NewAnalyzer(analyzers ...*analysis.Analyzer) *analysis.Analyzer {
 		Doc: "runs multiple analyzers and filters diagnostics based on " +
 			"//ignore directives",
 		Run: func(pass *analysis.Pass) (any, error) {
-			return runWithAnalyzers(pass, analyzers)
+			return runAnalyzers(pass, analyzers)
 		},
 	}
 }
 
-func runWithAnalyzers(
+type ignoreRange struct {
+	start, end token.Pos
+	analyzers  map[string]struct{}
+}
+
+func runAnalyzers(
 	pass *analysis.Pass, analyzers []*analysis.Analyzer,
 ) (any, error) {
-	var diags []analysis.Diagnostic
-	capturePass := &analysis.Pass{
-		Analyzer:     pass.Analyzer,
-		Fset:         pass.Fset,
-		Files:        pass.Files,
-		OtherFiles:   pass.OtherFiles,
-		IgnoredFiles: pass.IgnoredFiles,
-		Pkg:          pass.Pkg,
-		TypesInfo:    pass.TypesInfo,
-		TypesSizes:   pass.TypesSizes,
-		ResultOf:     pass.ResultOf,
-		Report:       func(d analysis.Diagnostic) { diags = append(diags, d) },
-	}
+	ranges := ignoreRanges(pass)
 	for _, a := range analyzers {
+		var diags []analysis.Diagnostic
+		capturePass := &analysis.Pass{
+			Analyzer:     a,
+			Fset:         pass.Fset,
+			Files:        pass.Files,
+			OtherFiles:   pass.OtherFiles,
+			IgnoredFiles: pass.IgnoredFiles,
+			Pkg:          pass.Pkg,
+			TypesInfo:    pass.TypesInfo,
+			TypesSizes:   pass.TypesSizes,
+			ResultOf:     pass.ResultOf,
+			Report: func(d analysis.Diagnostic) {
+				diags = append(diags, d)
+			},
+		}
 		if _, err := a.Run(capturePass); err != nil {
 			return nil, err
 		}
-	}
-	for _, d := range filter(diags, pass) {
-		pass.Report(d)
+		for d := range filter(diags, ranges, a.Name, pass.Fset) {
+			pass.Report(d)
+		}
 	}
 	return nil, nil
 }
 
-func filter(
-	diags []analysis.Diagnostic, pass *analysis.Pass,
-) (filtered []analysis.Diagnostic) {
-	ranges := passIgnores(pass)
-	for _, d := range diags {
-		if !ignoreDiagnostic(&d, ranges, pass.Fset) {
-			filtered = append(filtered, d)
-		}
-	}
-	return
-}
-
-func passIgnores(pass *analysis.Pass) (ranges []ignoreRange) {
+func ignoreRanges(pass *analysis.Pass) (ranges []ignoreRange) {
 	for _, file := range pass.Files {
 		ranges = append(ranges, fileIgnores(file, pass.Fset)...)
 	}
@@ -76,23 +72,25 @@ func fileIgnores(file *ast.File, fset *token.FileSet) (ranges []ignoreRange) {
 	cmap := ast.NewCommentMap(fset, file, file.Comments)
 	for _, cg := range file.Comments {
 		for _, c := range cg.List {
-			if analyzers := ignore(c.Text); analyzers != nil {
-				ranges = append(ranges, ignores(c, analyzers, file, cmap))
+			if analyzers := parseIgnore(c.Text); analyzers != nil {
+				ranges = append(
+					ranges,
+					newIgnoreRange(c, analyzers, file, cmap, cg),
+				)
 			}
 		}
 	}
 	return
 }
 
-func ignores(
+func newIgnoreRange(
 	comment *ast.Comment, analyzers map[string]struct{},
-	file *ast.File, cmap ast.CommentMap,
+	file *ast.File, cmap ast.CommentMap, group *ast.CommentGroup,
 ) ignoreRange {
 	if comment.Pos() < file.Package {
 		// Ignore analyzers on this entire file.
 		return ignoreRange{file.Pos(), file.End(), analyzers}
 	}
-	group := findCommentGroup(comment, file)
 	node := findCommentNode(comment, cmap)
 	if node != nil && group != nil {
 		// Ignore analyzers on this comment group and its associated node.
@@ -124,17 +122,24 @@ func findCommentNode(comment *ast.Comment, cmap ast.CommentMap) ast.Node {
 	return nil
 }
 
-func findCommentGroup(comment *ast.Comment, file *ast.File) *ast.CommentGroup {
-	for _, cg := range file.Comments {
-		if slices.Contains(cg.List, comment) {
-			return cg
+func filter(
+	diags []analysis.Diagnostic, ranges []ignoreRange,
+	analyzerName string, fset *token.FileSet,
+) func(func(analysis.Diagnostic) bool) {
+	return func(yield func(analysis.Diagnostic) bool) {
+		for _, d := range diags {
+			if !ignoreDiagnostic(&d, ranges, analyzerName, fset) {
+				if !yield(d) {
+					return
+				}
+			}
 		}
 	}
-	return nil
 }
 
 func ignoreDiagnostic(
-	diag *analysis.Diagnostic, ranges []ignoreRange, fset *token.FileSet,
+	diag *analysis.Diagnostic, ranges []ignoreRange,
+	analyzerName string, fset *token.FileSet,
 ) bool {
 	if !diag.Pos.IsValid() {
 		return false
@@ -148,7 +153,7 @@ func ignoreDiagnostic(
 		if fset.Position(r.start).Filename != diagPos.Filename {
 			continue
 		}
-		if analyzersContains(r.analyzers, diag) {
+		if analyzersContains(r.analyzers, analyzerName) {
 			if diag.Pos >= r.start && diag.Pos <= r.end {
 				return true
 			}
@@ -158,27 +163,16 @@ func ignoreDiagnostic(
 }
 
 func analyzersContains(
-	analyzers map[string]struct{}, diag *analysis.Diagnostic,
+	analyzers map[string]struct{}, analyzerName string,
 ) bool {
 	if _, ok := analyzers["all"]; ok {
 		return true
 	}
-	name := diag.Category
-	if name == "" && len(diag.Message) > 0 {
-		if parts := strings.SplitN(diag.Message, ":", 2); len(parts) > 0 {
-			name = strings.TrimSpace(parts[0])
-		}
-	}
-	_, exists := analyzers[name]
+	_, exists := analyzers[analyzerName]
 	return exists
 }
 
-type ignoreRange struct {
-	start, end token.Pos
-	analyzers  map[string]struct{}
-}
-
-func ignore(text string) map[string]struct{} {
+func parseIgnore(text string) map[string]struct{} {
 	re := regexp.MustCompile(`//ignore(?::([^/\s]+))?`)
 	match := re.FindStringSubmatch(text)
 	if match == nil {
@@ -194,7 +188,7 @@ func ignore(text string) map[string]struct{} {
 		result["all"] = struct{}{}
 		return result
 	}
-	for _, name := range strings.Split(analyzerList, ",") {
+	for name := range strings.SplitSeq(analyzerList, ",") {
 		if name = strings.TrimSpace(name); name != "" {
 			result[name] = struct{}{}
 		}

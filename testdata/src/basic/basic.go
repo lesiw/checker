@@ -2,11 +2,11 @@ package basic
 
 func goodFunc() {}
 
-func PublicFunc() {} // want "publicnames: PublicFunc is public"
+func PublicFunc() {} // want "PublicFunc is public"
 
-var count1 int // want "numberednames: count1 has numbers"
+var count1 int // want "count1 has numbers"
 var normalVar int
 
-func AnotherPublic() {} // want "publicnames: AnotherPublic is public"
+func AnotherPublic() {} // want "AnotherPublic is public"
 
-var item2 string // want "numberednames: item2 has numbers"
+var item2 string // want "item2 has numbers"

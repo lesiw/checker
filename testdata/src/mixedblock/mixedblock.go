@@ -8,7 +8,7 @@ func goodFunc() {
 // Function declaration should trigger publicnames, but content should be suppressed
 //
 //ignore:shortnames,underscorenames
-func PublicFunc() { // want "publicnames: PublicFunc is public"
+func PublicFunc() { // want "PublicFunc is public"
 	var x int // should be suppressed by block ignore
 	_ = x
 
@@ -21,11 +21,11 @@ func PublicFunc() { // want "publicnames: PublicFunc is public"
 
 // Function declaration should NOT trigger publicnames, but content should trigger shortnames/underscorenames
 func normalFunc() {
-	var y int // want "shortnames: y is single letter"
+	var y int // want "y is single letter"
 	_ = y
 
-	func_with_underscores := func() { // want "underscorenames: func_with_underscores has underscore"
-		var snake_case int // want "underscorenames: snake_case has underscore"
+	func_with_underscores := func() { // want "func_with_underscores has underscore"
+		var snake_case int // want "snake_case has underscore"
 		_ = snake_case
 	}
 	func_with_underscores()
@@ -53,11 +53,11 @@ func AllSuppressedFunc() {
 func PartiallySupressed() {
 	var a int // should be suppressed by shortnames ignore
 	_ = a
-	var count2 int // want "numberednames: count2 has numbers"
+	var count2 int // want "count2 has numbers"
 	_ = count2
 
-	func_with_underscores := func() { // want "underscorenames: func_with_underscores has underscore"
-		var snake_case int // want "underscorenames: snake_case has underscore"
+	func_with_underscores := func() { // want "func_with_underscores has underscore"
+		var snake_case int // want "snake_case has underscore"
 		_ = snake_case
 	}
 	func_with_underscores()
