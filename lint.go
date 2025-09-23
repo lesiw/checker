@@ -24,9 +24,9 @@ import (
 // Lint runs golangci-lint on the current package.
 //
 // Version should be, e.g. "1.2.3" and not contain a "v".
-func Lint(t *testing.T, version string) { lint(T{t}, version) }
+func Lint(t *testing.T, version string) { lint(testingT{t}, version) }
 
-func lint(t T, version string) {
+func lint(t testingT, version string) {
 	var bin string
 	_ = fslock.With(filepath.Join(cacheDir(t), "lint.lock"), func() error {
 		bin = lintBin(t, version)
@@ -42,7 +42,7 @@ func lint(t T, version string) {
 	}
 }
 
-func lintBin(t T, version string) (path string) {
+func lintBin(t testingT, version string) (path string) {
 	path = filepath.Join(
 		cacheDir(t),
 		fmt.Sprintf("golangci-lint-%s-%s-%s",
@@ -62,7 +62,7 @@ const lintSumURL = lintReleaseURL + "/golangci-lint-%[1]s-checksums.txt"
 const lintTarFile = "golangci-lint-%[1]s-%[2]s-%[3]s.tar.gz"
 const lintTarURL = lintReleaseURL + "/" + lintTarFile
 
-func lintSum(t T, version string) []byte {
+func lintSum(t testingT, version string) []byte {
 	url := fmt.Sprintf(lintSumURL, version)
 	resp, err := http.Get(url)
 	if err != nil {
@@ -78,7 +78,7 @@ func lintSum(t T, version string) []byte {
 	return hash
 }
 
-func lintHash(t T, r io.Reader, version string) string {
+func lintHash(t testingT, r io.Reader, version string) string {
 	wantfile := fmt.Sprintf("golangci-lint-%s-%s-%s.tar.gz",
 		version, runtime.GOOS, runtime.GOARCH)
 	scanner := bufio.NewScanner(r)
@@ -96,7 +96,7 @@ func lintHash(t T, r io.Reader, version string) string {
 	return ""
 }
 
-func lintFetch(t T, path, version string) {
+func lintFetch(t testingT, path, version string) {
 	url := fmt.Sprintf(lintTarURL, version, runtime.GOOS, runtime.GOARCH)
 	resp, err := http.Get(url)
 	if err != nil {
