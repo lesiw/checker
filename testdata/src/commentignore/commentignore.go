@@ -4,7 +4,9 @@ package commentignore
 func goodFunc() {}
 
 // TODO: This should be suppressed //ignore:todocomments
-func inlineSuppressedFunc() {}
+func inlineSuppressedFunc() {
+	// TODO: This should be reported // want "comment contains TODO"
+}
 
 // TODO: This should be suppressed
 //

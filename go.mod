@@ -4,6 +4,7 @@ go 1.24.4
 
 require (
 	github.com/danjacques/gofslock v0.0.0-20240212154529-d899e02bfe22
+	github.com/google/go-cmp v0.6.0
 	golang.org/x/tools v0.34.0
 )
 

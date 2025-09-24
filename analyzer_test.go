@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/analysistest"
 )
@@ -166,50 +167,48 @@ func TestFileLevelNolint(t *testing.T) {
 
 func TestParseNolint(t *testing.T) {
 	tests := []struct {
-		input string
-		want  map[string]struct{}
+		input         string
+		wantAnalyzers map[string]struct{}
+		wantIn        bool
 	}{
-		{"//ignore", map[string]struct{}{"all": {}}},
-		{"//ignore:all", map[string]struct{}{"all": {}}},
-		{"//ignore:test1", map[string]struct{}{"test1": {}}},
+		{"//ignore", map[string]struct{}{"all": {}}, false},
+		{"//ignore:all", map[string]struct{}{"all": {}}, false},
+		{"//ignore:test1", map[string]struct{}{"test1": {}}, false},
 		{"//ignore:test1,test2", map[string]struct{}{
 			"test1": {}, "test2": {},
-		}},
+		}, false},
 		{"//ignore:all // This is a comment",
-			map[string]struct{}{"all": {}}},
+			map[string]struct{}{"all": {}}, false},
 		{"//ignore:test1 // Explanatory comment",
-			map[string]struct{}{"test1": {}}},
+			map[string]struct{}{"test1": {}}, false},
 		{"//ignore:test1,test2 // Multiple analyzers",
-			map[string]struct{}{"test1": {}, "test2": {}}},
-		{"// not ignore", nil},
-		{"//other", nil},
+			map[string]struct{}{"test1": {}, "test2": {}}, false},
+		{"// not ignore", nil, false},
+		{"//other", nil, false},
 		{"// This is a comment. //ignore:all",
-			map[string]struct{}{"all": {}}},
+			map[string]struct{}{"all": {}}, true},
 		{"// This is a comment. //ignore:all // And another comment.",
-			map[string]struct{}{"all": {}}},
+			map[string]struct{}{"all": {}}, true},
 	}
 
 	for _, tt := range tests {
-		got := parseIgnore(tt.input)
-		if tt.want == nil {
-			if got != nil {
-				t.Errorf("parseNolint(%q) = %v, want nil", tt.input, got)
-			}
-			continue
-		}
-		if got == nil {
-			t.Errorf("parseNolint(%q) = nil, want %v", tt.input, tt.want)
-			continue
-		}
-		if len(got) != len(tt.want) {
-			t.Errorf("parseNolint(%q) length = %d, want %d",
-				tt.input, len(got), len(tt.want))
-			continue
-		}
-		for k := range tt.want {
-			if _, exists := got[k]; !exists {
-				t.Errorf("parseNolint(%q)[%q] missing", tt.input, k)
-			}
+		gotAnalyzers, gotIn := parseIgnore(tt.input)
+		if tt.wantAnalyzers == nil && gotAnalyzers != nil {
+			t.Errorf("parseNolint(%q) = %v, want nil",
+				tt.input, gotAnalyzers,
+			)
+		} else if gotAnalyzers == nil && tt.wantAnalyzers != nil {
+			t.Errorf("parseNolint(%q) = nil, want %v",
+				tt.input, tt.wantAnalyzers,
+			)
+		} else if !cmp.Equal(gotAnalyzers, tt.wantAnalyzers) {
+			t.Errorf("analyzers -want +got\n%s",
+				cmp.Diff(gotAnalyzers, tt.wantAnalyzers),
+			)
+		} else if gotIn != tt.wantIn {
+			t.Errorf("parseNoLint(%q) in = %t, want %t",
+				tt.input, gotIn, tt.wantIn,
+			)
 		}
 	}
 }

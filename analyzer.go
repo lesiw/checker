@@ -64,10 +64,16 @@ func fileIgnores(file *ast.File, fset *token.FileSet) (ranges []ignoreRange) {
 	cmap := ast.NewCommentMap(fset, file, file.Comments)
 	for _, cg := range file.Comments {
 		for _, c := range cg.List {
-			if analyzers := parseIgnore(c.Text); analyzers != nil {
+			analyzers, in := parseIgnore(c.Text)
+			if analyzers == nil {
+				continue
+			}
+			if in {
+				ranges = append(ranges, ignoreCommentLine(c, fset, analyzers))
+			} else {
 				ranges = append(
 					ranges,
-					newIgnoreRange(c, analyzers, file, cmap, cg),
+					newIgnoreRange(c, analyzers, file, cmap, cg, fset),
 				)
 			}
 		}
@@ -78,6 +84,7 @@ func fileIgnores(file *ast.File, fset *token.FileSet) (ranges []ignoreRange) {
 func newIgnoreRange(
 	comment *ast.Comment, analyzers map[string]struct{},
 	file *ast.File, cmap ast.CommentMap, group *ast.CommentGroup,
+	fset *token.FileSet,
 ) ignoreRange {
 	if comment.Pos() < file.Package {
 		// Ignore analyzers on this entire file.
@@ -85,11 +92,16 @@ func newIgnoreRange(
 	}
 	node := findCommentNode(comment, cmap)
 	if node != nil && group != nil {
-		// Ignore analyzers on this comment group and its associated node.
-		return ignoreRange{
-			min(group.Pos(), node.Pos()),
-			max(group.End(), node.End()),
-			analyzers,
+		if fset.Position(node.Pos()).Line == fset.Position(group.Pos()).Line {
+			// This is an inline comment. Ignore its associated line.
+			return ignoreCommentLine(comment, fset, analyzers)
+		} else {
+			// Ignore analyzers on this comment group and its associated node.
+			return ignoreRange{
+				min(group.Pos(), node.Pos()),
+				max(group.End(), node.End()),
+				analyzers,
+			}
 		}
 	} else if node != nil {
 		// Ignore analyzers on this node.
@@ -98,9 +110,29 @@ func newIgnoreRange(
 		// Ignore analyzers on this comment group.
 		return ignoreRange{group.Pos(), group.End(), analyzers}
 	} else {
-		// Ignore analyzers on the comment itself.
+		// Ignore analyzers on the current line.
+		return ignoreCommentLine(comment, fset, analyzers)
+	}
+}
+
+func ignoreCommentLine(
+	comment *ast.Comment, fset *token.FileSet, analyzers map[string]struct{},
+) ignoreRange {
+	file := fset.File(comment.Pos())
+	if file == nil {
 		return ignoreRange{comment.Pos(), comment.End(), analyzers}
 	}
+	line := fset.Position(comment.Pos()).Line
+	startPos := file.LineStart(line)
+
+	var endPos token.Pos
+	if line < file.LineCount() {
+		endPos = file.LineStart(line+1) - 1
+	} else {
+		endPos = token.Pos(file.Base() + file.Size())
+	}
+
+	return ignoreRange{startPos, endPos, analyzers}
 }
 
 func findCommentNode(comment *ast.Comment, cmap ast.CommentMap) ast.Node {
@@ -164,26 +196,27 @@ func analyzersContains(
 	return exists
 }
 
-func parseIgnore(text string) map[string]struct{} {
+func parseIgnore(text string) (analyzers map[string]struct{}, in bool) {
 	re := regexp.MustCompile(`//ignore(?::([^/\s]+))?`)
 	match := re.FindStringSubmatch(text)
 	if match == nil {
-		return nil
+		return
 	}
-	result := make(map[string]struct{})
+	in = !strings.HasPrefix(text, match[0])
+	analyzers = make(map[string]struct{})
 	if match[1] == "" {
-		result["all"] = struct{}{}
-		return result
+		analyzers["all"] = struct{}{}
+		return
 	}
 	analyzerList := match[1]
 	if analyzerList == "all" {
-		result["all"] = struct{}{}
-		return result
+		analyzers["all"] = struct{}{}
+		return
 	}
 	for name := range strings.SplitSeq(analyzerList, ",") {
 		if name = strings.TrimSpace(name); name != "" {
-			result[name] = struct{}{}
+			analyzers[name] = struct{}{}
 		}
 	}
-	return result
+	return
 }

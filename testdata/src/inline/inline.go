@@ -6,6 +6,7 @@ var normalVar int //ignore:numberednames
 
 func PublicFunc() {} //ignore:publicnames
 var count2 int    //ignore:numberednames
+var count3 int    // want "count3 has numbers"
 
 var anotherVar int //ignore:all
 
@@ -20,3 +21,8 @@ var item4 string        //ignore:publicnames,numberednames
 var commentedVar int //ignore:numberednames // This is legacy code
 
 func CommentedPublic() {} //ignore:publicnames // Complex legacy function
+
+func _() {
+	if count5 := count2; count5 != count2 { //ignore:numberednames
+	}
+}
