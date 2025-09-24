@@ -32,27 +32,19 @@ func runAnalyzers(
 	pass *analysis.Pass, analyzers []*analysis.Analyzer,
 ) (any, error) {
 	ranges := ignoreRanges(pass)
+	report := pass.Report
+	defer func() { pass.Report = report }()
 	for _, a := range analyzers {
 		var diags []analysis.Diagnostic
-		capturePass := &analysis.Pass{
-			Analyzer:     a,
-			Fset:         pass.Fset,
-			Files:        pass.Files,
-			OtherFiles:   pass.OtherFiles,
-			IgnoredFiles: pass.IgnoredFiles,
-			Pkg:          pass.Pkg,
-			TypesInfo:    pass.TypesInfo,
-			TypesSizes:   pass.TypesSizes,
-			ResultOf:     pass.ResultOf,
-			Report: func(d analysis.Diagnostic) {
-				diags = append(diags, d)
-			},
+		pass.Report = func(d analysis.Diagnostic) {
+			diags = append(diags, d)
 		}
-		if _, err := a.Run(capturePass); err != nil {
+		pass.Analyzer = a
+		if _, err := a.Run(pass); err != nil {
 			return nil, err
 		}
 		for d := range filter(diags, ranges, a.Name, pass.Fset) {
-			pass.Report(d)
+			report(d)
 		}
 	}
 	return nil, nil
