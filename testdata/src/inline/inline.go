@@ -25,4 +25,7 @@ func CommentedPublic() {} //ignore:publicnames // Complex legacy function
 func _() {
 	if count5 := count2; count5 != count2 { //ignore:numberednames
 	}
+	eq := func(x, y int) bool { return x == y }
+	if count6 := count2; !eq(count6, count2) { //ignore:numberednames
+	}
 }
