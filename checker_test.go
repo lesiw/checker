@@ -1,5 +1,17 @@
 package checker
 
-import "testing"
+import (
+	"testing"
 
-func TestCheck(t *testing.T) { Lint(t, "2.2.1") }
+	"github.com/kisielk/errcheck/errcheck"
+	"lesiw.io/linelen"
+	"lesiw.io/tidytypes"
+)
+
+func TestCheck(t *testing.T) {
+	Run(t,
+		errcheck.Analyzer,
+		linelen.Analyzer,
+		tidytypes.Analyzer,
+	)
+}

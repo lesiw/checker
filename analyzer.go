@@ -138,7 +138,7 @@ func ignoreCommentLine(
 	return ignoreRange{start, end, analyzers}
 }
 
-func linePos(pass *analysis.Pass, p token.Pos) (pos token.Pos, end token.Pos) {
+func linePos(pass *analysis.Pass, p token.Pos) (pos, end token.Pos) {
 	file := pass.Fset.File(p)
 	if file == nil {
 		return p, p

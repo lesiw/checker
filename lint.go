@@ -68,7 +68,7 @@ func lintSum(t testingT, version string) []byte {
 	if err != nil {
 		t.Fatalf("failed to fetch %v: %v", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	hashtext := lintHash(t, resp.Body, version)
 	hash, err := hex.DecodeString(hashtext)
@@ -102,7 +102,7 @@ func lintFetch(t testingT, path, version string) {
 	if err != nil {
 		t.Fatalf("failed to fetch %v: %v", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	sum := sha256.New()
 	var buf bytes.Buffer
@@ -114,7 +114,7 @@ func lintFetch(t testingT, path, version string) {
 	if err != nil {
 		t.Fatalf("failed to create gzip reader for %v: %v", url, err)
 	}
-	defer gr.Close()
+	defer func() { _ = gr.Close() }()
 
 	tr := tar.NewReader(gr)
 	for {
@@ -135,7 +135,7 @@ func lintFetch(t testingT, path, version string) {
 				_ = os.Remove(path)
 				t.Fatalf("failed to create file %v: %v", path, err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			if _, err = io.Copy(f, tr); err != nil {
 				_ = os.Remove(path)
 				t.Fatalf("failed to write file %v: %v", path, err)
