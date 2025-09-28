@@ -1,11 +1,13 @@
 package checker
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 
 	"golang.org/x/tools/go/analysis"
 )
@@ -31,20 +33,113 @@ type ignoreRange struct {
 func runAnalyzers(
 	pass *analysis.Pass, analyzers []*analysis.Analyzer,
 ) (any, error) {
+	// Most of this structure is borrowed from unitchecker.
+
+	if err := detectCycles(analyzers); err != nil {
+		return nil, err
+	}
 	ranges := ignoreRanges(pass)
-	report := pass.Report
-	defer func() { pass.Report = report }()
+
+	type action struct {
+		once   sync.Once
+		result any
+		err    error
+		diags  []analysis.Diagnostic
+	}
+	actions := make(map[*analysis.Analyzer]*action)
+
+	// Initialize actions for all analyzers (including dependencies).
+	var initActions func(a *analysis.Analyzer)
+	initActions = func(a *analysis.Analyzer) {
+		if _, ok := actions[a]; !ok {
+			actions[a] = new(action)
+			// Recursively initialize dependencies
+			for _, req := range a.Requires {
+				initActions(req)
+			}
+		}
+	}
 	for _, a := range analyzers {
-		var diags []analysis.Diagnostic
-		pass.Report = func(d analysis.Diagnostic) {
-			diags = append(diags, d)
+		initActions(a)
+	}
+
+	// Execute analyzers on-demand with dependency resolution.
+	var exec func(a *analysis.Analyzer) *action
+	var execAll func(analyzers []*analysis.Analyzer)
+	exec = func(a *analysis.Analyzer) *action {
+		act := actions[a]
+		act.once.Do(func() {
+			execAll(a.Requires) // Prefetch dependencies concurrently.
+
+			// The inputs to this analysis are the
+			// results of its prerequisites.
+			inputs := make(map[*analysis.Analyzer]any)
+			var failed []string
+			for _, req := range a.Requires {
+				reqact := exec(req)
+				if reqact.err != nil {
+					failed = append(failed, req.String())
+					continue
+				}
+				inputs[req] = reqact.result
+			}
+			if failed != nil {
+				slices.Sort(failed)
+				act.err = fmt.Errorf("failed prerequisites: %s",
+					strings.Join(failed, ", "),
+				)
+				return
+			}
+
+			// Create a new pass for this analyzer.
+			analyzerPass := *pass
+			analyzerPass.Analyzer = a
+			analyzerPass.ResultOf = inputs
+
+			// Facts handling: preserve the original fact methods.
+			// These will work correctly across analyzer boundaries
+			// since they operate on the same underlying pass data.
+			analyzerPass.ImportObjectFact = pass.ImportObjectFact
+			analyzerPass.ExportObjectFact = pass.ExportObjectFact
+			analyzerPass.AllObjectFacts = pass.AllObjectFacts
+			analyzerPass.ImportPackageFact = pass.ImportPackageFact
+			analyzerPass.ExportPackageFact = pass.ExportPackageFact
+			analyzerPass.AllPackageFacts = pass.AllPackageFacts
+
+			analyzerPass.Report = func(d analysis.Diagnostic) {
+				act.diags = append(act.diags, d)
+			}
+
+			act.result, act.err = a.Run(&analyzerPass)
+		})
+		return act
+	}
+	execAll = func(analyzers []*analysis.Analyzer) {
+		var wg sync.WaitGroup
+		for _, a := range analyzers {
+			wg.Add(1)
+			go func(a *analysis.Analyzer) {
+				_ = exec(a)
+				wg.Done()
+			}(a)
 		}
-		pass.Analyzer = a
-		if _, err := a.Run(pass); err != nil {
-			return nil, err
+		wg.Wait()
+	}
+	execAll(analyzers)
+
+	// Check for errors from root analyzers.
+	for _, a := range analyzers {
+		act := actions[a]
+		if act.err != nil {
+			return nil, act.err
 		}
-		for d := range filter(diags, ranges, a.Name, pass.Fset) {
-			report(d)
+	}
+	for analyzer, act := range actions {
+		if act.err != nil {
+			continue
+		}
+		for d := range filter(act.diags, ranges, analyzer.Name, pass.Fset) {
+			pass.Report(d)
 		}
 	}
 	return nil, nil

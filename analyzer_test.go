@@ -126,6 +126,34 @@ var todoAnalyzer = &analysis.Analyzer{
 	},
 }
 
+// dependentAnalyzer depends on publicNames and uses its results
+var dependentAnalyzer = &analysis.Analyzer{
+	Name:     "dependent",
+	Doc:      "analyzer that depends on publicnames",
+	Requires: []*analysis.Analyzer{publicNames},
+	Run: func(pass *analysis.Pass) (any, error) {
+		// This should have access to publicNames results via pass.ResultOf
+		if result, ok := pass.ResultOf[publicNames]; ok {
+			// Use the result somehow - report on the first file's package
+			// declaration
+			_ = result
+			if len(pass.Files) > 0 {
+				pass.Reportf(
+					pass.Files[0].Package, "dependent analyzer ran",
+				)
+			}
+		} else {
+			if len(pass.Files) > 0 {
+				pass.Reportf(
+					pass.Files[0].Package,
+					"dependent analyzer missing required result",
+				)
+			}
+		}
+		return "dependent result", nil
+	},
+}
+
 func TestZeroAnalyzers(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), NewAnalyzer(), "empty")
 }
@@ -227,4 +255,38 @@ func TestMixedBlockNolint(t *testing.T) {
 func TestCommentNolint(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
 		NewAnalyzer(todoAnalyzer), "commentignore")
+}
+
+func TestAnalyzerDependencies(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(),
+		NewAnalyzer(dependentAnalyzer), "dependency")
+}
+
+func TestCycleDetection(t *testing.T) {
+	analyzerA := &analysis.Analyzer{
+		Name:     "analyzerA",
+		Doc:      "analyzer A",
+		Requires: []*analysis.Analyzer{}, // Will be set to analyzerB
+		Run: func(pass *analysis.Pass) (any, error) {
+			return nil, nil
+		},
+	}
+	analyzerB := &analysis.Analyzer{
+		Name:     "analyzerB",
+		Doc:      "analyzer B",
+		Requires: []*analysis.Analyzer{analyzerA},
+		Run: func(pass *analysis.Pass) (any, error) {
+			return nil, nil
+		},
+	}
+	analyzerA.Requires = []*analysis.Analyzer{analyzerB} // Create cycle.
+
+	err := detectCycles([]*analysis.Analyzer{analyzerA})
+
+	if err == nil {
+		t.Error("Expected cycle detection error, but got none")
+	}
+	if !strings.Contains(err.Error(), "circular dependency") {
+		t.Errorf("Expected circular dependency error, got: %v", err)
+	}
 }
