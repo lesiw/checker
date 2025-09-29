@@ -262,6 +262,11 @@ func TestAnalyzerDependencies(t *testing.T) {
 		NewAnalyzer(dependentAnalyzer), "dependency")
 }
 
+func TestGeneratedFiles(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(),
+		NewAnalyzer(publicNames), "generated")
+}
+
 func TestCycleDetection(t *testing.T) {
 	analyzerA := &analysis.Analyzer{
 		Name:     "analyzerA",

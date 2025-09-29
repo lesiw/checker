@@ -156,6 +156,13 @@ func ignoreRanges(pass *analysis.Pass) (ranges []ignoreRange) {
 }
 
 func fileIgnores(file *ast.File, pass *analysis.Pass) (ranges []ignoreRange) {
+	if ast.IsGenerated(file) {
+		return []ignoreRange{{
+			start:     file.Pos(),
+			end:       file.End(),
+			analyzers: map[string]struct{}{"all": {}},
+		}}
+	}
 	cmap := ast.NewCommentMap(pass.Fset, file, file.Comments)
 	for _, cg := range file.Comments {
 		for _, c := range cg.List {
