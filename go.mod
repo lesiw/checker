@@ -3,7 +3,6 @@ module lesiw.io/checker
 go 1.24.7
 
 require (
-	github.com/danjacques/gofslock v0.0.0-20240212154529-d899e02bfe22
 	github.com/google/go-cmp v0.6.0
 	github.com/kisielk/errcheck v1.9.0
 	golang.org/x/tools v0.36.0
@@ -27,7 +26,6 @@ require (
 	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d // indirect
 	golang.org/x/sync v0.16.0 // indirect
-	golang.org/x/sys v0.35.0 // indirect
 	google.golang.org/appengine v1.6.5 // indirect
 )
 

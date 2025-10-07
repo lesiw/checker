@@ -1,4 +1,4 @@
-// Package checker provides functions to run analyzers and linters as Go tests.
+// Package checker provides functions to run analyzers as Go tests.
 //
 //	package main
 //
@@ -10,15 +10,12 @@
 //	)
 //
 //	func TestCheck(t *testing.T) {
-//	    checker.Run(t, errcheck.Analyzer) // Run errcheck by itself.
-//	    checker.Lint(t, "2.2.1")          // Run golangci-lint v2.2.1.
+//	    checker.Run(t, errcheck.Analyzer)
 //	}
 package checker
 
 import (
 	"bytes"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"golang.org/x/tools/go/analysis"
@@ -58,14 +55,16 @@ func run(t testingT, analyzers ...*analysis.Analyzer) {
 	}
 }
 
-func cacheDir(t testingT) string {
-	cache, err := os.UserCacheDir()
-	if err != nil {
-		t.Fatalf("failed to get user cache directory: %v", err)
-	}
-	dir := filepath.Join(cache, "gochecker")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatalf("failed to create cache directory: %v", err)
-	}
-	return dir
+type testingT struct{ *testing.T }
+
+func (t testingT) Fatalf(format string, args ...any) {
+	t.T.Fatalf("[lesiw.io/checker] "+format, args...)
+}
+
+func (t testingT) Errorf(format string, args ...any) {
+	t.T.Errorf("[lesiw.io/checker] "+format, args...)
+}
+
+func (t testingT) Logf(format string, args ...any) {
+	t.T.Logf("[lesiw.io/checker] "+format, args...)
 }
