@@ -56,4 +56,3 @@ func detectCycles(analyzers []*analysis.Analyzer) error {
 	}
 	return nil
 }
-
