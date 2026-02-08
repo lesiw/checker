@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -96,15 +97,32 @@ func runAnalyzers(
 			analyzerPass.Analyzer = a
 			analyzerPass.ResultOf = inputs
 
-			// Facts handling: preserve the original fact methods.
-			// These will work correctly across analyzer boundaries
-			// since they operate on the same underlying pass data.
+			// Facts handling: preserve the original fact methods,
+			// filtering AllObjectFacts and AllPackageFacts by the
+			// analyzer's registered FactTypes. This matches the
+			// behavior of gopls and unitchecker drivers.
 			analyzerPass.ImportObjectFact = pass.ImportObjectFact
 			analyzerPass.ExportObjectFact = pass.ExportObjectFact
-			analyzerPass.AllObjectFacts = pass.AllObjectFacts
 			analyzerPass.ImportPackageFact = pass.ImportPackageFact
 			analyzerPass.ExportPackageFact = pass.ExportPackageFact
-			analyzerPass.AllPackageFacts = pass.AllPackageFacts
+			factTypes := make(map[reflect.Type]bool)
+			for _, f := range a.FactTypes {
+				factTypes[reflect.TypeOf(f)] = true
+			}
+			analyzerPass.AllObjectFacts = func() []analysis.ObjectFact {
+				all := pass.AllObjectFacts()
+				return slices.DeleteFunc(all,
+					func(f analysis.ObjectFact) bool {
+						return !factTypes[reflect.TypeOf(f.Fact)]
+					})
+			}
+			analyzerPass.AllPackageFacts = func() []analysis.PackageFact {
+				all := pass.AllPackageFacts()
+				return slices.DeleteFunc(all,
+					func(f analysis.PackageFact) bool {
+						return !factTypes[reflect.TypeOf(f.Fact)]
+					})
+			}
 
 			analyzerPass.Report = func(d analysis.Diagnostic) {
 				act.diags = append(act.diags, d)

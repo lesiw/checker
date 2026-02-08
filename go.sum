@@ -116,7 +116,7 @@ gopkg.in/go-playground/validator.v9 v9.30.0/go.mod h1:+c9/zcJMFNgbLvly1L1V+PpxWd
 gopkg.in/yaml.v2 v2.2.2 h1:ZCJp+EgiOT7lHqUV2J862kp8Qj64Jo6az82+3Td9dZw=
 gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v3 v3.0.0-20191120175047-4206685974f2/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
-lesiw.io/linelen v0.1.0 h1:YtFWgVlRut+848fFm5QyaosT8yeWWaCrtPv2yv+Fdok=
-lesiw.io/linelen v0.1.0/go.mod h1:TMvjWQMDdWx115k4DTtDj+JJFp3ZYsJZPhOg1goA7Jc=
-lesiw.io/tidytypes v0.1.0 h1:FeZH+pWVbHDknjwiuNVQqfR20uqV5K8KPEZIwb9jsQY=
-lesiw.io/tidytypes v0.1.0/go.mod h1:hGTVOLNDH5+v38vTBQEy1FoHrcJpbMw0IVLKd2/0L5E=
+lesiw.io/linelen v0.2.0 h1:TUl3UbKObelz/+xu+vRXGGBDv+489w4gQvakl1HcEw0=
+lesiw.io/linelen v0.2.0/go.mod h1:fIC4E7CrM4QX/ipr1NkG+l82Lfzi8X6/1R7e1guYh6I=
+lesiw.io/tidytypes v0.2.0 h1:U/MI+Cwm5ShPEBEnKuVHtyU7o46gW4zPUojBUhd+/YM=
+lesiw.io/tidytypes v0.2.0/go.mod h1:RiOthB+QiQSCAwPA7SyTO86XN/crZekhwDCfAUivIcA=
