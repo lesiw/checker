@@ -193,49 +193,103 @@ func TestFileLevelNolint(t *testing.T) {
 		NewAnalyzer(publicNames, numberedNames), "filelevel")
 }
 
-func TestParseNolint(t *testing.T) {
+func TestNolintDirective(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(),
+		NewAnalyzer(publicNames, numberedNames), "nolint")
+}
+
+func TestLintIgnoreDirective(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(),
+		NewAnalyzer(publicNames, numberedNames), "lintignore")
+}
+
+func TestLintFileIgnoreDirective(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(),
+		NewAnalyzer(publicNames, numberedNames), "lintfileignore")
+}
+
+func TestParseDirective(t *testing.T) {
+	all := map[string]struct{}{"all": {}}
 	tests := []struct {
-		input         string
-		wantAnalyzers map[string]struct{}
-		wantIn        bool
+		input string
+		want  *directive
 	}{
-		{"//ignore", map[string]struct{}{"all": {}}, false},
-		{"//ignore:all", map[string]struct{}{"all": {}}, false},
-		{"//ignore:test1", map[string]struct{}{"test1": {}}, false},
-		{"//ignore:test1,test2", map[string]struct{}{
-			"test1": {}, "test2": {},
-		}, false},
-		{"//ignore:all // This is a comment",
-			map[string]struct{}{"all": {}}, false},
-		{"//ignore:test1 // Explanatory comment",
-			map[string]struct{}{"test1": {}}, false},
-		{"//ignore:test1,test2 // Multiple analyzers",
-			map[string]struct{}{"test1": {}, "test2": {}}, false},
-		{"// not ignore", nil, false},
-		{"//other", nil, false},
+		{"//ignore", &directive{analyzers: all}},
+		{"//ignore:all", &directive{analyzers: all}},
+		{"//ignore:test1", &directive{
+			analyzers: map[string]struct{}{"test1": {}},
+		}},
+		{"//ignore:test1,test2", &directive{
+			analyzers: map[string]struct{}{"test1": {}, "test2": {}},
+		}},
+		{"//ignore:all // This is a comment", &directive{analyzers: all}},
+		{"//ignore:test1 // Explanatory comment", &directive{
+			analyzers: map[string]struct{}{"test1": {}},
+		}},
+		{"//ignore:test1,test2 // Multiple analyzers", &directive{
+			analyzers: map[string]struct{}{"test1": {}, "test2": {}},
+		}},
+		{"// not ignore", nil},
+		{"//other", nil},
+		{"//ignored:test1", nil},
+		{"//nolinted", nil},
 		{"// This is a comment. //ignore:all",
-			map[string]struct{}{"all": {}}, true},
+			&directive{analyzers: all, inline: true}},
 		{"// This is a comment. //ignore:all // And another comment.",
-			map[string]struct{}{"all": {}}, true},
+			&directive{analyzers: all, inline: true}},
+
+		{"//nolint", &directive{analyzers: all}},
+		{"//nolint:all", &directive{analyzers: all}},
+		{"//nolint:errcheck", &directive{
+			analyzers: map[string]struct{}{"errcheck": {}},
+		}},
+		{"//nolint:errcheck,gosec", &directive{
+			analyzers: map[string]struct{}{
+				"errcheck": {}, "gosec": {},
+			},
+		}},
+		{"//nolint:gosec // deterministic", &directive{
+			analyzers: map[string]struct{}{"gosec": {}},
+		}},
+		{"// comment. //nolint:errcheck",
+			&directive{
+				analyzers: map[string]struct{}{"errcheck": {}},
+				inline:    true,
+			}},
+
+		{"//lint:ignore SA1000 reason", &directive{
+			analyzers: map[string]struct{}{"SA1000": {}},
+		}},
+		{"//lint:ignore SA1000,SA1001 reason", &directive{
+			analyzers: map[string]struct{}{
+				"SA1000": {}, "SA1001": {},
+			},
+		}},
+		{"// comment. //lint:ignore SA1000 reason",
+			&directive{
+				analyzers: map[string]struct{}{"SA1000": {}},
+				inline:    true,
+			}},
+
+		{"//lint:file-ignore U1000 generated code", &directive{
+			analyzers: map[string]struct{}{"U1000": {}},
+			file:      true,
+		}},
+		{"//lint:file-ignore SA1000,SA1001 reason", &directive{
+			analyzers: map[string]struct{}{
+				"SA1000": {}, "SA1001": {},
+			},
+			file: true,
+		}},
 	}
 
 	for _, tt := range tests {
-		gotAnalyzers, gotIn := parseIgnore(tt.input)
-		if tt.wantAnalyzers == nil && gotAnalyzers != nil {
-			t.Errorf("parseNolint(%q) = %v, want nil",
-				tt.input, gotAnalyzers,
-			)
-		} else if gotAnalyzers == nil && tt.wantAnalyzers != nil {
-			t.Errorf("parseNolint(%q) = nil, want %v",
-				tt.input, tt.wantAnalyzers,
-			)
-		} else if !cmp.Equal(gotAnalyzers, tt.wantAnalyzers) {
-			t.Errorf("analyzers -want +got\n%s",
-				cmp.Diff(gotAnalyzers, tt.wantAnalyzers),
-			)
-		} else if gotIn != tt.wantIn {
-			t.Errorf("parseNoLint(%q) in = %t, want %t",
-				tt.input, gotIn, tt.wantIn,
+		got := parseDirective(tt.input)
+		if !cmp.Equal(got, tt.want,
+			cmp.AllowUnexported(directive{})) {
+			t.Errorf("parseDirective(%q) -want +got\n%s",
+				tt.input,
+				cmp.Diff(tt.want, got, cmp.AllowUnexported(directive{})),
 			)
 		}
 	}

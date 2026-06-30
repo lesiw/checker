@@ -12,6 +12,27 @@
 //	func TestCheck(t *testing.T) {
 //	    checker.Run(t, errcheck.Analyzer)
 //	}
+//
+// # Ignore directives
+//
+// Diagnostics can be suppressed with comment directives. checker
+// recognizes its own //ignore directive as well as the //nolint
+// directive from golangci-lint and the //lint:ignore and
+// //lint:file-ignore directives from staticcheck, so projects
+// migrating from those tools can keep their existing comments.
+//
+//	//ignore:errcheck             // suppress errcheck on the next decl
+//	//nolint:errcheck             // same, golangci-lint syntax
+//	//lint:ignore SA1000 reason   // staticcheck syntax (reason required)
+//	//lint:file-ignore U1000 generated code  // whole file
+//
+// An omitted analyzer list (//ignore or //nolint) or the special
+// list "all" suppresses every analyzer. Multiple names are
+// comma-separated. When a directive sits on its own line above a
+// declaration it suppresses diagnostics for that declaration and
+// its body; trailing on the same line as code it suppresses only
+// that line. //lint:file-ignore applies to the whole file
+// regardless of position.
 package checker
 
 import (

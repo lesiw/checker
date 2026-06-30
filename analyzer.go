@@ -14,12 +14,12 @@ import (
 )
 
 // NewAnalyzer creates a new analyzer that runs multiple analyzers and filters
-// diagnostics based on //ignore directives.
+// diagnostics based on //ignore, //nolint, and //lint:ignore directives.
 func NewAnalyzer(analyzers ...*analysis.Analyzer) *analysis.Analyzer {
 	return &analysis.Analyzer{
 		Name: "checker",
 		Doc: "runs multiple analyzers and filters diagnostics based on " +
-			"//ignore directives",
+			"//ignore, //nolint, and //lint:ignore directives",
 		Run: func(pass *analysis.Pass) (any, error) {
 			return runAnalyzers(pass, analyzers)
 		},
@@ -184,16 +184,24 @@ func fileIgnores(file *ast.File, pass *analysis.Pass) (ranges []ignoreRange) {
 	cmap := ast.NewCommentMap(pass.Fset, file, file.Comments)
 	for _, cg := range file.Comments {
 		for _, c := range cg.List {
-			analyzers, in := parseIgnore(c.Text)
-			if analyzers == nil {
+			d := parseDirective(c.Text)
+			if d == nil {
 				continue
 			}
-			if in {
-				ranges = append(ranges, ignoreCommentLine(c, pass, analyzers))
-			} else {
+			switch {
+			case d.file:
+				ranges = append(ranges, ignoreRange{
+					file.Pos(), file.End(), d.analyzers,
+				})
+			case d.inline:
 				ranges = append(
 					ranges,
-					newIgnoreRange(c, analyzers, file, cmap, cg, pass),
+					ignoreCommentLine(c, pass, d.analyzers),
+				)
+			default:
+				ranges = append(
+					ranges,
+					newIgnoreRange(c, d.analyzers, file, cmap, cg, pass),
 				)
 			}
 		}
@@ -334,27 +342,66 @@ func analyzersContains(
 	return exists
 }
 
-func parseIgnore(text string) (analyzers map[string]struct{}, in bool) {
-	re := regexp.MustCompile(`//ignore(?::([^/\s]+))?`)
-	match := re.FindStringSubmatch(text)
-	if match == nil {
-		return
-	}
-	in = !strings.HasPrefix(text, match[0])
-	analyzers = make(map[string]struct{})
-	if match[1] == "" {
-		analyzers["all"] = struct{}{}
-		return
-	}
-	analyzerList := match[1]
-	if analyzerList == "all" {
-		analyzers["all"] = struct{}{}
-		return
-	}
-	for name := range strings.SplitSeq(analyzerList, ",") {
-		if name = strings.TrimSpace(name); name != "" {
-			analyzers[name] = struct{}{}
+// directive is a parsed comment directive that suppresses diagnostics.
+type directive struct {
+	// analyzers names the analyzers to suppress. The special key
+	// "all" matches every analyzer.
+	analyzers map[string]struct{}
+	// inline is true when the directive appears mid-comment, e.g.
+	// "// some text. //nolint:foo". The suppression then applies only
+	// to the line the comment sits on.
+	inline bool
+	// file is true for staticcheck's //lint:file-ignore, which
+	// suppresses the named analyzers across the whole file regardless
+	// of where the comment appears.
+	file bool
+}
+
+var (
+	// //ignore and //nolint share semantics: an omitted list (or
+	// ":all") suppresses every analyzer; otherwise the list is a
+	// comma-separated set of analyzer names.
+	ignoreOrNolintRe = regexp.MustCompile(
+		`//(?:ignore|nolint)\b(?::([^/\s]+))?`,
+	)
+	// Staticcheck per-line directive: "//lint:ignore Checks reason".
+	lintIgnoreRe = regexp.MustCompile(`//lint:ignore\s+(\S+)`)
+	// Staticcheck per-file directive: "//lint:file-ignore Checks reason".
+	lintFileIgnoreRe = regexp.MustCompile(`//lint:file-ignore\s+(\S+)`)
+)
+
+func parseDirective(text string) *directive {
+	if m := lintFileIgnoreRe.FindStringSubmatch(text); m != nil {
+		return &directive{
+			analyzers: parseAnalyzerList(m[1]),
+			file:      true,
 		}
 	}
-	return
+	if m := lintIgnoreRe.FindStringSubmatch(text); m != nil {
+		return &directive{
+			analyzers: parseAnalyzerList(m[1]),
+			inline:    !strings.HasPrefix(text, m[0]),
+		}
+	}
+	if m := ignoreOrNolintRe.FindStringSubmatch(text); m != nil {
+		return &directive{
+			analyzers: parseAnalyzerList(m[1]),
+			inline:    !strings.HasPrefix(text, m[0]),
+		}
+	}
+	return nil
+}
+
+func parseAnalyzerList(list string) map[string]struct{} {
+	out := make(map[string]struct{})
+	if list == "" || list == "all" {
+		out["all"] = struct{}{}
+		return out
+	}
+	for name := range strings.SplitSeq(list, ",") {
+		if name = strings.TrimSpace(name); name != "" {
+			out[name] = struct{}{}
+		}
+	}
+	return out
 }
