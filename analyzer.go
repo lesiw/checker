@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"reflect"
 	"regexp"
 	"slices"
@@ -20,10 +21,42 @@ func NewAnalyzer(analyzers ...*analysis.Analyzer) *analysis.Analyzer {
 		Name: "checker",
 		Doc: "runs multiple analyzers and filters diagnostics based on " +
 			"//ignore directives",
+		FactTypes: factTypes(analyzers),
 		Run: func(pass *analysis.Pass) (any, error) {
 			return runAnalyzers(pass, analyzers)
 		},
 	}
+}
+
+// factTypes returns the fact types declared by analyzers and their
+// transitive requirements. Declaring them on the combined analyzer
+// tells drivers to analyze dependency packages and which facts to
+// carry across package boundaries.
+func factTypes(analyzers []*analysis.Analyzer) (facts []analysis.Fact) {
+	var (
+		seen    = make(map[reflect.Type]struct{})
+		visited = make(map[*analysis.Analyzer]struct{})
+		visit   func(analyzers []*analysis.Analyzer)
+	)
+	visit = func(analyzers []*analysis.Analyzer) {
+		for _, a := range analyzers {
+			if _, ok := visited[a]; ok {
+				continue
+			}
+			visited[a] = struct{}{}
+			for _, f := range a.FactTypes {
+				t := reflect.TypeOf(f)
+				if _, ok := seen[t]; ok {
+					continue
+				}
+				seen[t] = struct{}{}
+				facts = append(facts, f)
+			}
+			visit(a.Requires)
+		}
+	}
+	visit(analyzers)
+	return facts
 }
 
 type ignoreRange struct {
@@ -40,6 +73,7 @@ func runAnalyzers(
 		return nil, err
 	}
 	ranges := ignoreRanges(pass)
+	var factMu sync.Mutex
 
 	type action struct {
 		once   sync.Once
@@ -101,24 +135,48 @@ func runAnalyzers(
 			// filtering AllObjectFacts and AllPackageFacts by the
 			// analyzer's registered FactTypes. This matches the
 			// behavior of gopls and unitchecker drivers.
-			analyzerPass.ImportObjectFact = pass.ImportObjectFact
-			analyzerPass.ExportObjectFact = pass.ExportObjectFact
-			analyzerPass.ImportPackageFact = pass.ImportPackageFact
-			analyzerPass.ExportPackageFact = pass.ExportPackageFact
+			analyzerPass.ImportObjectFact = func(
+				obj types.Object, fact analysis.Fact,
+			) bool {
+				factMu.Lock()
+				defer factMu.Unlock()
+				return pass.ImportObjectFact(obj, fact)
+			}
+			analyzerPass.ExportObjectFact = func(
+				obj types.Object, fact analysis.Fact,
+			) {
+				factMu.Lock()
+				defer factMu.Unlock()
+				pass.ExportObjectFact(obj, fact)
+			}
+			analyzerPass.ImportPackageFact = func(
+				pkg *types.Package, fact analysis.Fact,
+			) bool {
+				factMu.Lock()
+				defer factMu.Unlock()
+				return pass.ImportPackageFact(pkg, fact)
+			}
+			analyzerPass.ExportPackageFact = func(fact analysis.Fact) {
+				factMu.Lock()
+				defer factMu.Unlock()
+				pass.ExportPackageFact(fact)
+			}
 			factTypes := make(map[reflect.Type]bool)
 			for _, f := range a.FactTypes {
 				factTypes[reflect.TypeOf(f)] = true
 			}
 			analyzerPass.AllObjectFacts = func() []analysis.ObjectFact {
-				all := pass.AllObjectFacts()
-				return slices.DeleteFunc(all,
+				factMu.Lock()
+				defer factMu.Unlock()
+				return slices.DeleteFunc(pass.AllObjectFacts(),
 					func(f analysis.ObjectFact) bool {
 						return !factTypes[reflect.TypeOf(f.Fact)]
 					})
 			}
 			analyzerPass.AllPackageFacts = func() []analysis.PackageFact {
-				all := pass.AllPackageFacts()
-				return slices.DeleteFunc(all,
+				factMu.Lock()
+				defer factMu.Unlock()
+				return slices.DeleteFunc(pass.AllPackageFacts(),
 					func(f analysis.PackageFact) bool {
 						return !factTypes[reflect.TypeOf(f.Fact)]
 					})

@@ -1,8 +1,11 @@
 package checker
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -293,5 +296,91 @@ func TestCycleDetection(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "circular dependency") {
 		t.Errorf("Expected circular dependency error, got: %v", err)
+	}
+}
+
+type factA struct{}
+
+func (*factA) AFact() {}
+
+type factB struct{}
+
+func (*factB) AFact() {}
+
+func TestNewAnalyzerFactTypes(t *testing.T) {
+	dep := &analysis.Analyzer{
+		Name:      "dep",
+		Doc:       "dep",
+		FactTypes: []analysis.Fact{new(factB)},
+		Run:       func(*analysis.Pass) (any, error) { return nil, nil },
+	}
+	top := &analysis.Analyzer{
+		Name:      "top",
+		Doc:       "top",
+		Requires:  []*analysis.Analyzer{dep},
+		FactTypes: []analysis.Fact{new(factA)},
+		Run:       func(*analysis.Pass) (any, error) { return nil, nil },
+	}
+	got := make(map[reflect.Type]struct{})
+	for _, f := range NewAnalyzer(top).FactTypes {
+		got[reflect.TypeOf(f)] = struct{}{}
+	}
+	want := map[reflect.Type]struct{}{
+		reflect.TypeFor[*factA](): {},
+		reflect.TypeFor[*factB](): {},
+	}
+	if !cmp.Equal(got, want) {
+		t.Errorf("NewAnalyzer(top).FactTypes: -want +got\n%s",
+			cmp.Diff(want, got))
+	}
+}
+
+func TestConcurrentFactAccess(t *testing.T) {
+	objects := make([]types.Object, 8)
+	for i := range objects {
+		objects[i] = types.NewVar(
+			token.NoPos, nil, fmt.Sprintf("v%d", i), types.Typ[types.Int],
+		)
+	}
+	facts := make(map[types.Object]analysis.Fact)
+	spin := func(pass *analysis.Pass) (any, error) {
+		for i := range 1000 {
+			pass.ExportObjectFact(objects[i%len(objects)], new(factA))
+			pass.AllObjectFacts()
+		}
+		return nil, nil
+	}
+	writer := &analysis.Analyzer{
+		Name:      "writer",
+		Doc:       "writer",
+		FactTypes: []analysis.Fact{new(factA)},
+		Run:       spin,
+	}
+	reader := &analysis.Analyzer{
+		Name:      "reader",
+		Doc:       "reader",
+		FactTypes: []analysis.Fact{new(factA)},
+		Run:       spin,
+	}
+	pass := &analysis.Pass{
+		Fset: token.NewFileSet(),
+		ExportObjectFact: func(obj types.Object, fact analysis.Fact) {
+			facts[obj] = fact
+		},
+		ImportObjectFact: func(obj types.Object, fact analysis.Fact) bool {
+			_, ok := facts[obj]
+			return ok
+		},
+		AllObjectFacts: func() (all []analysis.ObjectFact) {
+			for obj, fact := range facts {
+				all = append(all, analysis.ObjectFact{Object: obj, Fact: fact})
+			}
+			return all
+		},
+		Report: func(analysis.Diagnostic) {},
+	}
+	_, err := runAnalyzers(pass, []*analysis.Analyzer{writer, reader})
+	if err != nil {
+		t.Errorf("runAnalyzers(pass, ...) = %v, want nil", err)
 	}
 }
