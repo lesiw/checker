@@ -276,17 +276,25 @@ func newIgnoreRange(
 		} else {
 			// Ignore analyzers on this comment group and its associated node.
 			return ignoreRange{
-				min(group.Pos(), node.Pos()),
-				max(group.End(), node.End()),
+				lineStart(pass, min(group.Pos(), node.Pos())),
+				lineEnd(pass, max(group.End(), node.End())),
 				analyzers,
 			}
 		}
 	} else if node != nil {
 		// Ignore analyzers on this node.
-		return ignoreRange{node.Pos(), node.End(), analyzers}
+		return ignoreRange{
+			lineStart(pass, node.Pos()),
+			lineEnd(pass, node.End()),
+			analyzers,
+		}
 	} else if group != nil {
 		// Ignore analyzers on this comment group.
-		return ignoreRange{group.Pos(), group.End(), analyzers}
+		return ignoreRange{
+			lineStart(pass, group.Pos()),
+			lineEnd(pass, group.End()),
+			analyzers,
+		}
 	} else {
 		// Ignore analyzers on the current line.
 		return ignoreCommentLine(comment, pass, analyzers)
@@ -309,26 +317,35 @@ func isInlineComment(comment *ast.Comment, pass *analysis.Pass) bool {
 func ignoreCommentLine(
 	comment *ast.Comment, pass *analysis.Pass, analyzers map[string]struct{},
 ) ignoreRange {
-	start, end := linePos(pass, comment.Pos())
+	start, end := lineStart(pass, comment.Pos()), lineEnd(pass, comment.Pos())
 	if start == end {
 		return ignoreRange{comment.Pos(), comment.End(), analyzers}
 	}
 	return ignoreRange{start, end, analyzers}
 }
 
-func linePos(pass *analysis.Pass, p token.Pos) (pos, end token.Pos) {
+// lineStart widens p to the start of its line, since a diagnostic may
+// anchor at column 1.
+func lineStart(pass *analysis.Pass, p token.Pos) token.Pos {
 	file := pass.Fset.File(p)
 	if file == nil {
-		return p, p
+		return p
 	}
-	line := pass.Fset.Position(p).Line
-	pos = file.LineStart(line)
+	return file.LineStart(file.Line(p))
+}
+
+// lineEnd widens p to the end of its line, since a diagnostic may
+// anchor at the line's last character.
+func lineEnd(pass *analysis.Pass, p token.Pos) token.Pos {
+	file := pass.Fset.File(p)
+	if file == nil {
+		return p
+	}
+	line := file.Line(p)
 	if line < file.LineCount() {
-		end = file.LineStart(line+1) - 1
-	} else {
-		end = token.Pos(file.Base() + file.Size())
+		return file.LineStart(line+1) - 1
 	}
-	return
+	return token.Pos(file.Base() + file.Size())
 }
 
 func findCommentNode(comment *ast.Comment, cmap ast.CommentMap) ast.Node {

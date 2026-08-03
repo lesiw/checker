@@ -119,8 +119,31 @@ var todoAnalyzer = &analysis.Analyzer{
 		for _, file := range pass.Files {
 			for _, cg := range file.Comments {
 				for _, c := range cg.List {
-					if strings.Contains(c.Text, "TODO") {
-						pass.Reportf(c.Pos(), "comment contains TODO")
+					if !strings.Contains(c.Text, "TODO") {
+						continue
+					}
+					f := pass.Fset.File(c.Pos())
+					pass.Reportf(
+						f.LineStart(f.Line(c.Pos())),
+						"comment contains TODO",
+					)
+				}
+			}
+		}
+		return nil, nil
+	},
+}
+
+var dotAnalyzer = &analysis.Analyzer{
+	Name: "dotcomments",
+	Doc:  "reports comments that do not end in a period",
+	Run: func(pass *analysis.Pass) (any, error) {
+		for _, file := range pass.Files {
+			for _, cg := range file.Comments {
+				for _, c := range cg.List {
+					if !strings.HasSuffix(c.Text, ".") {
+						pass.Reportf(c.End()-1,
+							"comment does not end in a period")
 					}
 				}
 			}
@@ -263,6 +286,16 @@ func TestCommentNolint(t *testing.T) {
 func TestFileStartNolint(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
 		NewAnalyzer(todoAnalyzer), "filestart")
+}
+
+func TestLineStartNolint(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(),
+		NewAnalyzer(todoAnalyzer), "linestart")
+}
+
+func TestLineEndNolint(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(),
+		NewAnalyzer(dotAnalyzer), "lineend")
 }
 
 func TestAnalyzerDependencies(t *testing.T) {
