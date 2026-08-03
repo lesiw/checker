@@ -260,6 +260,11 @@ func TestCommentNolint(t *testing.T) {
 		NewAnalyzer(todoAnalyzer), "commentignore")
 }
 
+func TestFileStartNolint(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(),
+		NewAnalyzer(todoAnalyzer), "filestart")
+}
+
 func TestAnalyzerDependencies(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
 		NewAnalyzer(dependentAnalyzer), "dependency")

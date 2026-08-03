@@ -234,7 +234,7 @@ func ignoreRanges(pass *analysis.Pass) (ranges []ignoreRange) {
 func fileIgnores(file *ast.File, pass *analysis.Pass) (ranges []ignoreRange) {
 	if ast.IsGenerated(file) {
 		return []ignoreRange{{
-			start:     file.Pos(),
+			start:     file.FileStart,
 			end:       file.End(),
 			analyzers: map[string]struct{}{"all": {}},
 		}}
@@ -266,7 +266,7 @@ func newIgnoreRange(
 ) ignoreRange {
 	if comment.Pos() < file.Package {
 		// Ignore analyzers on this entire file.
-		return ignoreRange{file.Pos(), file.End(), analyzers}
+		return ignoreRange{file.FileStart, file.End(), analyzers}
 	}
 	node := findCommentNode(comment, cmap)
 	if node != nil && group != nil {
