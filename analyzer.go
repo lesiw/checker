@@ -159,16 +159,17 @@ func runAnalyzers(pass *analysis.Pass, analyzers []*analysis.Analyzer) (any, err
 				defer factMu.Unlock()
 				pass.ExportPackageFact(fact)
 			}
-			factTypes := make(map[reflect.Type]bool)
+			factTypes := make(map[reflect.Type]struct{})
 			for _, f := range a.FactTypes {
-				factTypes[reflect.TypeOf(f)] = true
+				factTypes[reflect.TypeOf(f)] = struct{}{}
 			}
 			analyzerPass.AllObjectFacts = func() []analysis.ObjectFact {
 				factMu.Lock()
 				defer factMu.Unlock()
 				return slices.DeleteFunc(pass.AllObjectFacts(),
 					func(f analysis.ObjectFact) bool {
-						return !factTypes[reflect.TypeOf(f.Fact)]
+						_, ok := factTypes[reflect.TypeOf(f.Fact)]
+						return !ok
 					})
 			}
 			analyzerPass.AllPackageFacts = func() []analysis.PackageFact {
@@ -176,7 +177,8 @@ func runAnalyzers(pass *analysis.Pass, analyzers []*analysis.Analyzer) (any, err
 				defer factMu.Unlock()
 				return slices.DeleteFunc(pass.AllPackageFacts(),
 					func(f analysis.PackageFact) bool {
-						return !factTypes[reflect.TypeOf(f.Fact)]
+						_, ok := factTypes[reflect.TypeOf(f.Fact)]
+						return !ok
 					})
 			}
 
