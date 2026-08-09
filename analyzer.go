@@ -64,9 +64,7 @@ type ignoreRange struct {
 	analyzers  map[string]struct{}
 }
 
-func runAnalyzers(
-	pass *analysis.Pass, analyzers []*analysis.Analyzer,
-) (any, error) {
+func runAnalyzers(pass *analysis.Pass, analyzers []*analysis.Analyzer) (any, error) {
 	// Most of this structure is borrowed from unitchecker.
 
 	if err := detectCycles(analyzers); err != nil {
@@ -194,10 +192,7 @@ func runAnalyzers(
 		var wg sync.WaitGroup
 		for _, a := range analyzers {
 			wg.Add(1)
-			go func(a *analysis.Analyzer) {
-				_ = exec(a)
-				wg.Done()
-			}(a)
+			go func(a *analysis.Analyzer) { _ = exec(a); wg.Done() }(a)
 		}
 		wg.Wait()
 	}
@@ -259,11 +254,7 @@ func fileIgnores(file *ast.File, pass *analysis.Pass) (ranges []ignoreRange) {
 	return
 }
 
-func newIgnoreRange(
-	comment *ast.Comment, analyzers map[string]struct{},
-	file *ast.File, cmap ast.CommentMap, group *ast.CommentGroup,
-	pass *analysis.Pass,
-) ignoreRange {
+func newIgnoreRange(comment *ast.Comment, analyzers map[string]struct{}, file *ast.File, cmap ast.CommentMap, group *ast.CommentGroup, pass *analysis.Pass) ignoreRange {
 	if comment.Pos() < file.Package {
 		// Ignore analyzers on this entire file.
 		return ignoreRange{file.FileStart, file.End(), analyzers}
@@ -314,9 +305,7 @@ func isInlineComment(comment *ast.Comment, pass *analysis.Pass) bool {
 	return !commentRe.Match(buf[pos:end])
 }
 
-func ignoreCommentLine(
-	comment *ast.Comment, pass *analysis.Pass, analyzers map[string]struct{},
-) ignoreRange {
+func ignoreCommentLine(comment *ast.Comment, pass *analysis.Pass, analyzers map[string]struct{}) ignoreRange {
 	start, end := lineStart(pass, comment.Pos()), lineEnd(pass, comment.Pos())
 	if start == end {
 		return ignoreRange{comment.Pos(), comment.End(), analyzers}
@@ -359,10 +348,7 @@ func findCommentNode(comment *ast.Comment, cmap ast.CommentMap) ast.Node {
 	return nil
 }
 
-func filter(
-	diags []analysis.Diagnostic, ranges []ignoreRange,
-	analyzerName string, fset *token.FileSet,
-) func(func(analysis.Diagnostic) bool) {
+func filter(diags []analysis.Diagnostic, ranges []ignoreRange, analyzerName string, fset *token.FileSet) func(func(analysis.Diagnostic) bool) {
 	return func(yield func(analysis.Diagnostic) bool) {
 		for _, d := range diags {
 			if !ignoreDiagnostic(&d, ranges, analyzerName, fset) {
@@ -374,10 +360,7 @@ func filter(
 	}
 }
 
-func ignoreDiagnostic(
-	diag *analysis.Diagnostic, ranges []ignoreRange,
-	analyzerName string, fset *token.FileSet,
-) bool {
+func ignoreDiagnostic(diag *analysis.Diagnostic, ranges []ignoreRange, analyzerName string, fset *token.FileSet) bool {
 	if !diag.Pos.IsValid() {
 		return false
 	}
@@ -399,9 +382,7 @@ func ignoreDiagnostic(
 	return false
 }
 
-func analyzersContains(
-	analyzers map[string]struct{}, analyzerName string,
-) bool {
+func analyzersContains(analyzers map[string]struct{}, analyzerName string) bool {
 	if _, ok := analyzers["all"]; ok {
 		return true
 	}

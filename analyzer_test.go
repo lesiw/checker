@@ -35,9 +35,7 @@ func identAnalyze(checker identCheck) func(*analysis.Pass) (any, error) {
 	}
 }
 
-func checkFuncDecl(
-	node *ast.FuncDecl, pass *analysis.Pass, checker identCheck,
-) {
+func checkFuncDecl(node *ast.FuncDecl, pass *analysis.Pass, checker identCheck) {
 	if node.Name != nil && node.Name.Name != "_" {
 		checker(pass, node.Name)
 	}
@@ -57,9 +55,7 @@ func checkGenDecl(node *ast.GenDecl, pass *analysis.Pass, checker identCheck) {
 	}
 }
 
-func checkAssignStmt(
-	node *ast.AssignStmt, pass *analysis.Pass, checker identCheck,
-) {
+func checkAssignStmt(node *ast.AssignStmt, pass *analysis.Pass, checker identCheck) {
 	if node.Tok == token.DEFINE {
 		for _, expr := range node.Lhs {
 			if ident, ok := expr.(*ast.Ident); ok && ident.Name != "_" {
@@ -143,7 +139,8 @@ var dotAnalyzer = &analysis.Analyzer{
 				for _, c := range cg.List {
 					if !strings.HasSuffix(c.Text, ".") {
 						pass.Reportf(c.End()-1,
-							"comment does not end in a period")
+							"comment does not end in a period",
+						)
 					}
 				}
 			}
@@ -164,9 +161,7 @@ var dependentAnalyzer = &analysis.Analyzer{
 			// declaration
 			_ = result
 			if len(pass.Files) > 0 {
-				pass.Reportf(
-					pass.Files[0].Package, "dependent analyzer ran",
-				)
+				pass.Reportf(pass.Files[0].Package, "dependent analyzer ran")
 			}
 		} else {
 			if len(pass.Files) > 0 {
@@ -186,37 +181,44 @@ func TestZeroAnalyzers(t *testing.T) {
 
 func TestOneAnalyzer(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
-		NewAnalyzer(publicNames), "single")
+		NewAnalyzer(publicNames), "single",
+	)
 }
 
 func TestMultipleAnalyzers(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
-		NewAnalyzer(publicNames, numberedNames), "basic")
+		NewAnalyzer(publicNames, numberedNames), "basic",
+	)
 }
 
 func TestNolint(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
-		NewAnalyzer(publicNames, numberedNames), "ignore")
+		NewAnalyzer(publicNames, numberedNames), "ignore",
+	)
 }
 
 func TestMultipleNolint(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
-		NewAnalyzer(publicNames, numberedNames), "multiple")
+		NewAnalyzer(publicNames, numberedNames), "multiple",
+	)
 }
 
 func TestInlineNolint(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
-		NewAnalyzer(publicNames, numberedNames), "inline")
+		NewAnalyzer(publicNames, numberedNames), "inline",
+	)
 }
 
 func TestBlockNolint(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
-		NewAnalyzer(publicNames, numberedNames), "block")
+		NewAnalyzer(publicNames, numberedNames), "block",
+	)
 }
 
 func TestFileLevelNolint(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
-		NewAnalyzer(publicNames, numberedNames), "filelevel")
+		NewAnalyzer(publicNames, numberedNames), "filelevel",
+	)
 }
 
 func TestParseNolint(t *testing.T) {
@@ -224,33 +226,36 @@ func TestParseNolint(t *testing.T) {
 		input         string
 		wantAnalyzers map[string]struct{}
 		wantIn        bool
-	}{
-		{"//ignore", map[string]struct{}{"all": {}}, false},
-		{"//ignore:all", map[string]struct{}{"all": {}}, false},
-		{"//ignore:test1", map[string]struct{}{"test1": {}}, false},
-		{"//ignore:test1,test2", map[string]struct{}{
+	}{{
+		"//ignore", map[string]struct{}{"all": {}}, false,
+	}, {
+		"//ignore:all", map[string]struct{}{"all": {}}, false,
+	}, {
+		"//ignore:test1", map[string]struct{}{"test1": {}}, false,
+	}, {"//ignore:test1,test2", map[string]struct{}{
+		"test1": {}, "test2": {},
+	}, false}, {"//ignore:all // This is a comment",
+		map[string]struct{}{
+			"all": {},
+		}, false}, {"//ignore:test1 // Explanatory comment",
+		map[string]struct{}{
+			"test1": {},
+		}, false}, {"//ignore:test1,test2 // Multiple analyzers",
+		map[string]struct{}{
 			"test1": {}, "test2": {},
-		}, false},
-		{"//ignore:all // This is a comment",
-			map[string]struct{}{"all": {}}, false},
-		{"//ignore:test1 // Explanatory comment",
-			map[string]struct{}{"test1": {}}, false},
-		{"//ignore:test1,test2 // Multiple analyzers",
-			map[string]struct{}{"test1": {}, "test2": {}}, false},
-		{"// not ignore", nil, false},
-		{"//other", nil, false},
-		{"// This is a comment. //ignore:all",
-			map[string]struct{}{"all": {}}, true},
+		}, false}, {
+		"// not ignore", nil, false,
+	}, {"//other", nil, false}, {"// This is a comment. //ignore:all",
+		map[string]struct{}{
+			"all": {},
+		}, true},
 		{"// This is a comment. //ignore:all // And another comment.",
-			map[string]struct{}{"all": {}}, true},
-	}
+			map[string]struct{}{"all": {}}, true}}
 
 	for _, tt := range tests {
 		gotAnalyzers, gotIn := parseIgnore(tt.input)
 		if tt.wantAnalyzers == nil && gotAnalyzers != nil {
-			t.Errorf("parseNolint(%q) = %v, want nil",
-				tt.input, gotAnalyzers,
-			)
+			t.Errorf("parseNolint(%q) = %v, want nil", tt.input, gotAnalyzers)
 		} else if gotAnalyzers == nil && tt.wantAnalyzers != nil {
 			t.Errorf("parseNolint(%q) = nil, want %v",
 				tt.input, tt.wantAnalyzers,
@@ -269,43 +274,51 @@ func TestParseNolint(t *testing.T) {
 
 func TestBlockLevelNolint(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
-		NewAnalyzer(shortNames, underscoreNames), "blocklevel")
+		NewAnalyzer(shortNames, underscoreNames), "blocklevel",
+	)
 }
 
 func TestMixedBlockNolint(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), NewAnalyzer(
-		publicNames, numberedNames, shortNames, underscoreNames),
+		publicNames, numberedNames, shortNames, underscoreNames,
+	),
 		"mixedblock")
 }
 
 func TestCommentNolint(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
-		NewAnalyzer(todoAnalyzer), "commentignore")
+		NewAnalyzer(todoAnalyzer), "commentignore",
+	)
 }
 
 func TestFileStartNolint(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
-		NewAnalyzer(todoAnalyzer), "filestart")
+		NewAnalyzer(todoAnalyzer), "filestart",
+	)
 }
 
 func TestLineStartNolint(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
-		NewAnalyzer(todoAnalyzer), "linestart")
+		NewAnalyzer(todoAnalyzer), "linestart",
+	)
 }
 
 func TestLineEndNolint(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
-		NewAnalyzer(dotAnalyzer), "lineend")
+		NewAnalyzer(dotAnalyzer), "lineend",
+	)
 }
 
 func TestAnalyzerDependencies(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
-		NewAnalyzer(dependentAnalyzer), "dependency")
+		NewAnalyzer(dependentAnalyzer), "dependency",
+	)
 }
 
 func TestGeneratedFiles(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(),
-		NewAnalyzer(publicNames), "generated")
+		NewAnalyzer(publicNames), "generated",
+	)
 }
 
 func TestCycleDetection(t *testing.T) {
@@ -369,7 +382,8 @@ func TestNewAnalyzerFactTypes(t *testing.T) {
 	}
 	if !cmp.Equal(got, want) {
 		t.Errorf("NewAnalyzer(top).FactTypes: -want +got\n%s",
-			cmp.Diff(want, got))
+			cmp.Diff(want, got),
+		)
 	}
 }
 
