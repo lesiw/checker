@@ -8,10 +8,11 @@ import (
 )
 
 func detectCycles(analyzers []*analysis.Analyzer) error {
-	visited := make(map[*analysis.Analyzer]struct{})
-	recStack := make(map[*analysis.Analyzer]struct{})
-
-	var visit func(*analysis.Analyzer, []string) error
+	var (
+		visited  = make(map[*analysis.Analyzer]struct{})
+		recStack = make(map[*analysis.Analyzer]struct{})
+		visit    func(*analysis.Analyzer, []string) error
+	)
 	visit = func(a *analysis.Analyzer, path []string) error {
 		if _, inStack := recStack[a]; inStack {
 			cycle := append(path, a.Name)

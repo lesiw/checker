@@ -391,8 +391,10 @@ func analyzersContains(analyzers map[string]struct{}, analyzerName string) bool 
 }
 
 func parseIgnore(text string) (analyzers map[string]struct{}, in bool) {
-	re := regexp.MustCompile(`//ignore(?::([^/\s]+))?`)
-	match := re.FindStringSubmatch(text)
+	var (
+		re    = regexp.MustCompile(`//ignore(?::([^/\s]+))?`)
+		match = re.FindStringSubmatch(text)
+	)
 	if match == nil {
 		return
 	}

@@ -65,89 +65,86 @@ func checkAssignStmt(node *ast.AssignStmt, pass *analysis.Pass, checker identChe
 	}
 }
 
-var publicNames = &analysis.Analyzer{
-	Name: "publicnames",
-	Doc:  "reports on public names",
-	Run: identAnalyze(func(pass *analysis.Pass, ident *ast.Ident) {
-		if ident.IsExported() {
-			pass.Reportf(ident.Pos(), "%s is public", ident.Name)
-		}
-	}),
-}
-
-var numberedNames = &analysis.Analyzer{
-	Name: "numberednames",
-	Doc:  "reports on names with numbers in them",
-	Run: identAnalyze(func(pass *analysis.Pass, ident *ast.Ident) {
-		for _, r := range ident.Name {
-			if r >= '0' && r <= '9' {
-				pass.Reportf(ident.Pos(), "%s has numbers", ident.Name)
-				break
+var (
+	publicNames = &analysis.Analyzer{
+		Name: "publicnames",
+		Doc:  "reports on public names",
+		Run: identAnalyze(func(pass *analysis.Pass, ident *ast.Ident) {
+			if ident.IsExported() {
+				pass.Reportf(ident.Pos(), "%s is public", ident.Name)
 			}
-		}
-	}),
-}
-
-var shortNames = &analysis.Analyzer{
-	Name: "shortnames",
-	Doc:  "reports on single-letter names",
-	Run: identAnalyze(func(pass *analysis.Pass, ident *ast.Ident) {
-		if len(ident.Name) == 1 {
-			pass.Reportf(ident.Pos(), "%s is single letter", ident.Name)
-		}
-	}),
-}
-
-var underscoreNames = &analysis.Analyzer{
-	Name: "underscorenames",
-	Doc:  "reports on names containing underscores",
-	Run: identAnalyze(func(pass *analysis.Pass, ident *ast.Ident) {
-		if strings.Contains(ident.Name, "_") {
-			pass.Reportf(ident.Pos(), "%s has underscore", ident.Name)
-		}
-	}),
-}
-
-var todoAnalyzer = &analysis.Analyzer{
-	Name: "todocomments",
-	Doc:  "reports on TODO comments",
-	Run: func(pass *analysis.Pass) (any, error) {
-		for _, file := range pass.Files {
-			for _, cg := range file.Comments {
-				for _, c := range cg.List {
-					if !strings.Contains(c.Text, "TODO") {
-						continue
-					}
-					f := pass.Fset.File(c.Pos())
-					pass.Reportf(
-						f.LineStart(f.Line(c.Pos())),
-						"comment contains TODO",
-					)
+		}),
+	}
+	numberedNames = &analysis.Analyzer{
+		Name: "numberednames",
+		Doc:  "reports on names with numbers in them",
+		Run: identAnalyze(func(pass *analysis.Pass, ident *ast.Ident) {
+			for _, r := range ident.Name {
+				if r >= '0' && r <= '9' {
+					pass.Reportf(ident.Pos(), "%s has numbers", ident.Name)
+					break
 				}
 			}
-		}
-		return nil, nil
-	},
-}
-
-var dotAnalyzer = &analysis.Analyzer{
-	Name: "dotcomments",
-	Doc:  "reports comments that do not end in a period",
-	Run: func(pass *analysis.Pass) (any, error) {
-		for _, file := range pass.Files {
-			for _, cg := range file.Comments {
-				for _, c := range cg.List {
-					if !strings.HasSuffix(c.Text, ".") {
-						pass.Reportf(c.End()-1,
-							"comment does not end in a period",
+		}),
+	}
+	shortNames = &analysis.Analyzer{
+		Name: "shortnames",
+		Doc:  "reports on single-letter names",
+		Run: identAnalyze(func(pass *analysis.Pass, ident *ast.Ident) {
+			if len(ident.Name) == 1 {
+				pass.Reportf(ident.Pos(), "%s is single letter", ident.Name)
+			}
+		}),
+	}
+	underscoreNames = &analysis.Analyzer{
+		Name: "underscorenames",
+		Doc:  "reports on names containing underscores",
+		Run: identAnalyze(func(pass *analysis.Pass, ident *ast.Ident) {
+			if strings.Contains(ident.Name, "_") {
+				pass.Reportf(ident.Pos(), "%s has underscore", ident.Name)
+			}
+		}),
+	}
+	todoAnalyzer = &analysis.Analyzer{
+		Name: "todocomments",
+		Doc:  "reports on TODO comments",
+		Run: func(pass *analysis.Pass) (any, error) {
+			for _, file := range pass.Files {
+				for _, cg := range file.Comments {
+					for _, c := range cg.List {
+						if !strings.Contains(c.Text, "TODO") {
+							continue
+						}
+						f := pass.Fset.File(c.Pos())
+						pass.Reportf(
+							f.LineStart(f.Line(c.Pos())),
+							"comment contains TODO",
 						)
 					}
 				}
 			}
-		}
-		return nil, nil
-	},
-}
+			return nil, nil
+		},
+	}
+	dotAnalyzer = &analysis.Analyzer{
+		Name: "dotcomments",
+		Doc:  "reports comments that do not end in a period",
+		Run: func(pass *analysis.Pass) (any, error) {
+			for _, file := range pass.Files {
+				for _, cg := range file.Comments {
+					for _, c := range cg.List {
+						if !strings.HasSuffix(c.Text, ".") {
+							pass.Reportf(c.End()-1,
+								"comment does not end in a period",
+							)
+						}
+					}
+				}
+			}
+			return nil, nil
+		},
+	}
+)
 
 // dependentAnalyzer depends on publicNames and uses its results
 var dependentAnalyzer = &analysis.Analyzer{
@@ -322,22 +319,24 @@ func TestGeneratedFiles(t *testing.T) {
 }
 
 func TestCycleDetection(t *testing.T) {
-	analyzerA := &analysis.Analyzer{
-		Name:     "analyzerA",
-		Doc:      "analyzer A",
-		Requires: []*analysis.Analyzer{}, // Will be set to analyzerB
-		Run: func(pass *analysis.Pass) (any, error) {
-			return nil, nil
-		},
-	}
-	analyzerB := &analysis.Analyzer{
-		Name:     "analyzerB",
-		Doc:      "analyzer B",
-		Requires: []*analysis.Analyzer{analyzerA},
-		Run: func(pass *analysis.Pass) (any, error) {
-			return nil, nil
-		},
-	}
+	var (
+		analyzerA = &analysis.Analyzer{
+			Name:     "analyzerA",
+			Doc:      "analyzer A",
+			Requires: []*analysis.Analyzer{}, // Will be set to analyzerB
+			Run: func(pass *analysis.Pass) (any, error) {
+				return nil, nil
+			},
+		}
+		analyzerB = &analysis.Analyzer{
+			Name:     "analyzerB",
+			Doc:      "analyzer B",
+			Requires: []*analysis.Analyzer{analyzerA},
+			Run: func(pass *analysis.Pass) (any, error) {
+				return nil, nil
+			},
+		}
+	)
 	analyzerA.Requires = []*analysis.Analyzer{analyzerB} // Create cycle.
 
 	err := detectCycles([]*analysis.Analyzer{analyzerA})
@@ -359,20 +358,22 @@ type factB struct{}
 func (*factB) AFact() {}
 
 func TestNewAnalyzerFactTypes(t *testing.T) {
-	dep := &analysis.Analyzer{
-		Name:      "dep",
-		Doc:       "dep",
-		FactTypes: []analysis.Fact{new(factB)},
-		Run:       func(*analysis.Pass) (any, error) { return nil, nil },
-	}
-	top := &analysis.Analyzer{
-		Name:      "top",
-		Doc:       "top",
-		Requires:  []*analysis.Analyzer{dep},
-		FactTypes: []analysis.Fact{new(factA)},
-		Run:       func(*analysis.Pass) (any, error) { return nil, nil },
-	}
-	got := make(map[reflect.Type]struct{})
+	var (
+		dep = &analysis.Analyzer{
+			Name:      "dep",
+			Doc:       "dep",
+			FactTypes: []analysis.Fact{new(factB)},
+			Run:       func(*analysis.Pass) (any, error) { return nil, nil },
+		}
+		top = &analysis.Analyzer{
+			Name:      "top",
+			Doc:       "top",
+			Requires:  []*analysis.Analyzer{dep},
+			FactTypes: []analysis.Fact{new(factA)},
+			Run:       func(*analysis.Pass) (any, error) { return nil, nil },
+		}
+		got = make(map[reflect.Type]struct{})
+	)
 	for _, f := range NewAnalyzer(top).FactTypes {
 		got[reflect.TypeOf(f)] = struct{}{}
 	}
